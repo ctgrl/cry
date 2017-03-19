@@ -6,14 +6,15 @@ import (
 )
 
 func TestComms(t *testing.T) {
-	fmt.Println("Generating key...")
+	fmt.Println("Generating key and ID...")
 
+	id := GenerateID()
 	priv := Generate()
 	str := Stringify(priv)
 	fmt.Println(str)
 
 	fmt.Println("Uploading...")
-	err := PostKey(priv)
+	err := PostKey(priv, id)
 
 	if err != nil {
 		panic(err)
@@ -22,7 +23,7 @@ func TestComms(t *testing.T) {
 	fmt.Println("Key uploaded")
 
 	fmt.Println("Retrieving key...")
-	priv, err = GetKey()
+	priv, err = GetKey(id)
 
 	if err != nil {
 		panic(err)
@@ -34,6 +35,7 @@ func TestComms(t *testing.T) {
 func TestServer(t *testing.T) {
 	fmt.Println("Sending the same key twice...")
 	priv := Generate()
-	PostKey(priv)
-	PostKey(priv)
+	id := GenerateID()
+	PostKey(priv, id)
+	PostKey(priv, id)
 }

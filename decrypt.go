@@ -5,21 +5,35 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/rsa"
-	"io/ioutil"
+	"io"
+	"os"
 
 	"crypto/sha256"
-
-	"strings"
 )
 
 func decrypt(file string, priv *rsa.PrivateKey) {
-	data, err := ioutil.ReadFile(file)
+	inFile, err := os.Open(file)
 
 	if err != nil {
 		panic(err)
 	}
 
-	header := data[:EncryptedHeaderSize]
+	defer inFile.Close()
+
+	outFile, err := os.OpenFile(file[:len(file)-len(LockedExtension)], os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0777)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer outFile.Close()
+
+	header := make([]byte, EncryptedHeaderSize)
+	_, err = io.ReadFull(inFile, header)
+	if err != nil {
+		panic(err)
+	}
+
 	label := []byte("")
 
 	header, err = rsa.DecryptOAEP(sha256.New(), rand.Reader, priv, header, label)
@@ -31,20 +45,17 @@ func decrypt(file string, priv *rsa.PrivateKey) {
 	key := header[:KeySize]
 	iv := header[KeySize : KeySize+aes.BlockSize]
 
-	data = data[EncryptedHeaderSize:]
-
 	block, err := aes.NewCipher(key)
 
 	if err != nil {
 		panic(err)
 	}
 
-	cipher := cipher.NewCFBDecrypter(block, iv)
-	cipher.XORKeyStream(data, data)
+	stream := cipher.NewCFBDecrypter(block, iv)
+	reader := &cipher.StreamReader{S: stream, R: inFile}
 
-	if strings.HasSuffix(file, LockedExtension) {
-		file = file[:len(file)-len(LockedExtension)]
+	_, err = io.Copy(outFile, reader)
+	if err != nil {
+		panic(err)
 	}
-
-	ioutil.WriteFile(file, data, 0777) // TODO
 }
